@@ -1,85 +1,88 @@
-
 import streamlit as st
 import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import numpy as np
 import pickle
 
-# Load the LSTM model
+# Page configuration
+st.set_page_config(page_title="LSTM Text Generator")
+
+# Load resources
 @st.cache_resource
 def load_model():
-    model = tf.keras.models.load_model('lstm_model.h5')
-    return model
+    try:
+        with open('lstm_model.pkl', 'rb') as f:
+            model = pickle.load(f)
+        return model
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
+        return None
 
-# Load tokenizer
 @st.cache_resource
 def load_tokenizer():
-    with open('tokenizer.pkl', 'rb') as f:
-        tokenizer = pickle.load(f)
-    return tokenizer
+    try:
+        with open('tokenizer.pkl', 'rb') as f:
+            tokenizer = pickle.load(f)
+        return tokenizer
+    except Exception as e:
+        st.error(f"Error loading tokenizer: {e}")
+        return None
 
-# Load index_to_word dictionary
 @st.cache_resource
 def load_index_to_word():
-    with open('index_to_word.pkl', 'rb') as f:
-        index_to_word = pickle.load(f)
-    return index_to_word
+    try:
+        with open('index_to_word.pkl', 'rb') as f:
+            index_to_word = pickle.load(f)
+        return index_to_word
+    except Exception as e:
+        st.error(f"Error loading word index: {e}")
+        return None
 
-# Get max_len from the loaded model's input shape
-# Assuming input_length is the second dimension of the input shape
-@st.cache_resource
-def get_max_len(model):
-    # The Embedding layer's input_length is at index 1 of its input_shape
-    # The input_shape of the first layer (Embedding) should be (None, max_len)
-    max_len = model.layers[0].input_shape[1]
-    return max_len
-
+# Load everything
 model = load_model()
 tokenizer = load_tokenizer()
 index_to_word = load_index_to_word()
-max_len = get_max_len(model)
 
-def predictor(model, tokenizer, text, max_len):
+# Get max_len
+if model:
+    max_len = model.layers[0].input_shape[1]
+else:
+    max_len = 100  # Default fallback
+
+# Text generation functions
+def predict_next_word(text):
     text = text.lower()
-    seq = tokenizer.texts_to_sequences([text])[0]
-    padded_sequence = pad_sequences([seq], maxlen=max_len, padding='pre')
-
-    pred = model.predict(padded_sequence, verbose=0)
+    seq = tokenizer.texts_to_sequences([text])
+    if not seq[0]:
+        return None
+    
+    padded = pad_sequences(seq, maxlen=max_len, padding='pre')
+    pred = model.predict(padded, verbose=0)
     pred_index = np.argmax(pred)
+    
+    return index_to_word.get(pred_index, None)
 
-    # Handle cases where pred_index might not be in index_to_word
-    # This can happen if the model predicts an index outside the known vocabulary
-    if pred_index in index_to_word:
-        predicted_word = index_to_word[pred_index]
-    else:
-        predicted_word = None # Or a special token like '[UNK]'
-
-    return predicted_word
-
-def generate_text(model, tokenizer, seed_text, max_len, num_words):
-    generated_sequence = seed_text.lower()
+def generate_text(seed_text, num_words=10):
+    generated = seed_text
     for _ in range(num_words):
-        next_word = predictor(model, tokenizer, generated_sequence, max_len)
+        next_word = predict_next_word(generated)
         if next_word is None:
             break
-        generated_sequence += " " + next_word
+        generated += " " + next_word
+    return generated
 
-    return generated_sequence
+# Streamlit UI
+st.title("📝 LSTM Text Generator")
+st.write("Enter a starting phrase to generate text:")
 
+seed_text = st.text_input("Seed text:", "The meaning of life is")
+num_words = st.slider("Words to generate:", 1, 50, 10)
 
-# Streamlit App Interface
-st.title("Text Generation with LSTM")
-st.write("Enter a seed text to generate subsequent words.")
-
-seed_text = st.text_input("Seed Text:", "The meaning of life is")
-num_words = st.slider("Number of words to generate:", 1, 50, 10)
-
-if st.button("Generate Text"):
-    if seed_text:
-        with st.spinner("Generating text..."):
-            generated_text = generate_text(model, tokenizer, seed_text, max_len, num_words)
-            st.success("Text Generated!")
-            st.write("**Generated Text:**")
-            st.write(generated_text)
+if st.button("Generate"):
+    if model and tokenizer and index_to_word:
+        with st.spinner("Generating..."):
+            result = generate_text(seed_text, num_words)
+            st.success("Generated Text:")
+            st.write(result)
     else:
-        st.warning("Please enter a seed text to generate!")
+        st.error("Model not loaded properly!")
