@@ -47,7 +47,7 @@ index_to_word = load_index_to_word()
 if model:
     max_len = model.layers[0].input_shape[1]
 else:
-    max_len = 100  # Default fallback
+    max_len = 20  # Default fallback
 
 # Text generation functions
 def predict_next_word(text):
