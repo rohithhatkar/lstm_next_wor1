@@ -43,20 +43,23 @@ model = load_model()
 tokenizer = load_tokenizer()
 index_to_word = load_index_to_word()
 
-# Get max_len
-if model:
-    max_len = model.layers[0].input_shape[1]
-else:
-    max_len = 20  # Default fallback
+# --- FIX: Hardcoded max_len to prevent Keras 3 crash ---
+# If your generated text looks weird, change '20' to the number
+# you used for 'maxlen' or sequence length in your training code.
+max_len = 20 
+# -------------------------------------------------------
 
 # Text generation functions
 def predict_next_word(text):
     text = text.lower()
     seq = tokenizer.texts_to_sequences([text])
-    if not seq[0]:
+    if not seq or not seq[0]:
         return None
     
+    # Pad the sequence
     padded = pad_sequences(seq, maxlen=max_len, padding='pre')
+    
+    # Predict
     pred = model.predict(padded, verbose=0)
     pred_index = np.argmax(pred)
     
